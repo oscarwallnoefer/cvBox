@@ -1,4 +1,3 @@
-[![HTML5](https://img.shields.io/badge/HTML5-5-orange.svg)](https://developer.mozilla.org/en-US/docs/Web/Guide/HTML/HTML5)
 [![Open in browser](https://img.shields.io/badge/Open_in_Browser-blue?logo=google-chrome)](index.html)
 
 # cvBox
