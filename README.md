@@ -15,7 +15,7 @@ cvBox is a single HTML file that lets you organize all your CV versions in a **t
 
 One key feature is that the CV is **rendered in Markdown in real time** within the interface. This means you can immediately see the structure of your CV and, once exported, edit it quickly in Word, Pages, or any Markdown reader.
 
-All of this works with just **two files**: `index.html` for the interactive editor, and the exported `.json` file to store your CV tree.
+All of this works with just **two files**: `cvBox.html` for the interactive editor, and the exported `.json` file to store your CV tree.
 
 ---
 
