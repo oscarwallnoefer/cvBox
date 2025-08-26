@@ -19,7 +19,7 @@ All of this works with just **two files**: `index.html` for the interactive edit
 
 ---
 
-## How it works
+### How it works
 
 - Open `cvBox.html` in your browser.
 - Fill the root: Personal Information, Education, and Experience. (only the first time) 
@@ -35,12 +35,12 @@ cvBox is deliberately simple but highly effective to save time and to reduce con
 
 ---
 
-## Installation
+### Installation
 
 No installation is required. Just open `cvBox.html` in your browser.
 
 ---
 
-## License
+### License
 
 This project is open source and free to use for personal purposes.
