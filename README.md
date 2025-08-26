@@ -1,6 +1,8 @@
 [![Open in browser](https://img.shields.io/badge/Open_in_Browser-blue?logo=google-chrome)](cvBox.html)
 
-<img src="./logo/logo_cvBox.png" alt="logo cvBox" width="300" style="vertical-align: middle"/>
+<p align="center">
+  <img src="./logo/logo_cvBox.png" alt="Logo" width="200" height="200"/>
+</p>
 
 ### About cvBox
 
