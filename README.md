@@ -1,9 +1,8 @@
 [![Open in browser](https://img.shields.io/badge/Open_in_Browser-blue?logo=google-chrome)](cvBox.html)
 
 <p align="center">
-  <img src="./logo/logo_cvBox.png" alt="Logo" width="250" height="250"/>
+  <img src="./logo/logo_cvBox.png" alt="Logo" width="400" height="400"/>
 </p>
-
 ### About cvBox
 
 Managing multiple versions of your CV over the years can be surprisingly complicated. Each job application may require a slightly different CV, and keeping track of what you sent, when, and for which purpose often leads to confusion and wasted time. cvBox was created to solve this problem in the simplest (and rough) way possible.
