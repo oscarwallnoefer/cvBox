@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cvBox - track your CVs</title>
+<style>
+:root { --border:#d0d7de; --muted:#6e7781; }
+body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; max-width: 920px; margin: 24px auto; padding: 0 16px; }
+h1 { margin: 0 0 12px; }
+.row { display:flex; gap:16px; flex-wrap:wrap; }
+.col { flex:1 1 300px; }
+fieldset { border:1px solid var(--border); border-radius:12px; padding:12px; margin-bottom:14px; }
+legend { padding:0 6px; font-weight:600; }
+label { display:block; font-size:14px; color:#222; margin:8px 0 4px; }
+input[type="text"], input[type="email"], textarea { width:100%; box-sizing:border-box; padding:8px; border:1px solid var(--border); border-radius:8px; }
+textarea { resize:vertical; min-height:90px; }
+.btn { padding:8px 12px; border:1px solid var(--border); border-radius:10px; background:#fff; cursor:pointer; }
+.btn.primary { background:#111; color:#fff; border-color:#111; }
+.btn.danger { border-color:#991b1b; color:#991b1b; }
+.stack { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.section-card { border:1px solid var(--border); border-radius:12px; padding:10px; margin-bottom:10px; }
+.section-head { display:flex; gap:8px; align-items:center; justify-content:space-between; }
+.muted { color:var(--muted); font-size:12px; }
+#preview { border:1px solid var(--border); border-radius:12px; padding:12px; white-space:pre-wrap; background:#fafafa; font-family:"Helvetica Neue", 
+Helvetica, Arial, sans-serif; }
+ul.tree { list-style:none; padding-left:0; }
+ul.tree li { margin:2px 0 2px 0; }
+.indent { margin-left:18px; border-left:2px dashed #eee; padding-left:8px; }
+#asciiTree { background:#fafafa; padding:8px; border:1px solid var(--border); border-radius:8px; white-space:pre; font-family: monospace; }
+</style>
+</head>
+<body>
+
+<h1>cvBox - track your CVs</h1>
+<p class="muted">Fixed sections (Personal Information, Experience, Education) stay identical across the whole tree. Dynamic sections can change per 
+branch.</p>
+
+<fieldset>
+<legend>Versions (Tree)</legend>
+<div class="row">
+<div class="col">
+<label for="versionSelect">Current version</label>
+<select id="versionSelect"></select>
+<div class="stack" style="margin-top:8px;">
+<input type="text" id="newVersionName" placeholder="New child version name"/>
+<button class="btn" id="addChildBtn">Add child</button>
+<button class="btn danger" id="deleteVersionBtn" title="Delete current version and its subtree">Delete version</button>
+</div>
+<div class="stack" style="margin-top:8px;">
+<button class="btn" id="downloadMdBtn">Download .md</button>
+<button class="btn" id="downloadJsonBtn">Download tree (.json)</button>
+<label class="btn" style="cursor:pointer;">Import tree JSON
+<input type="file" id="importJsonInput" accept="application/json" style="display:none;">
+</label>
+</div>
+</div>
+<div class="col">
+<pre id="asciiTree"></pre>
+<div id="treeContainer"></div>
+</div>
+</div>
+</fieldset>
+
+<fieldset>
+<legend>Fixed — Personal Information</legend>
+<div class="row">
+<div class="col"><label>Full name</label><input type="text" id="pi_name" placeholder="Name Surname"/></div>
+<div class="col"><label>Email</label><input type="email" id="pi_email" placeholder="nsurname@gmail.com"/></div>
+<div class="col"><label>Phone</label><input type="text" id="pi_phone" placeholder="+39 333 000 0000"/></div>
+<div class="col"><label>Location</label><input type="text" id="pi_location" placeholder="Rome, IT"/></div>
+<div class="col"><label>Website / LinkedIn</label><input type="text" id="pi_web" placeholder="linkedin.com/in/namesurname"/></div>
+</div>
+</fieldset>
+
+<fieldset>
+<legend>Fixed — Experience</legend>
+<label class="muted">Free text. Use Markdown-like lists (e.g., “- Role — Company (Year–Year)”).</label>
+<textarea id="fixed_experience" placeholder="- Postdoc — ACME (2020–2024)
+- PhD — Beta (2018–2020)"></textarea>
+</fieldset>
+
+<fieldset>
+<legend>Fixed — Education</legend>
+<textarea id="fixed_education" placeholder="- M.Sc. Evolution — University (2016–2018)
+- B.Sc. Biology — University (2013–2016)"></textarea>
+</fieldset>
+
+<fieldset>
+<legend>Dynamic sections (change per version)</legend>
+<div id="dynamicSections"></div>
+<button class="btn" id="addSectionBtn">+ Add section</button>
+<span class="muted">Examples: Skills, Projects, Certifications, Publications, Languages…</span>
+</fieldset>
+
+<fieldset>
+<legend>Preview (Markdown)</legend>
+<pre id="preview"></pre>
+</fieldset>
+
+<script>
+const state = {
+  fixed: { personal:{name:"",email:"",phone:"",location:"",web:""}, experience:"", education:"" },
+  versions: { root:{id:"root", name:"Root", parent:null, dynamicSections:[]} },
+  current:"root"
+};
+
+function uid(){ return "v_"+Math.random().toString(36).slice(2,10); }
+function getCurrentNode(){ return state.versions[state.current]; }
+function cloneDynamic(sections){ return sections.map(s=>({title:s.title, content:s.content})); }
+function buildPathName(id){
+  const parts=[]; let cur=state.versions[id];
+  while(cur){ parts.unshift(cur.name); cur = cur.parent ? state.versions[cur.parent] : null; }
+  return parts.join(" / ");
+}
+function buildTreeIndex(){
+  const children={}; Object.values(state.versions).forEach(v=>children[v.id]=[]); 
+  Object.values(state.versions).forEach(v=>{ if(v.parent) children[v.parent].push(v.id); }); 
+  return children;
+}
+
+const asciiTreeEl = document.getElementById("asciiTree");
+function renderAsciiTree(){
+  const childIdx = buildTreeIndex();
+  function recurse(id,prefix="",isLast=true){
+    const node = state.versions[id];
+    let line = prefix;
+    if(prefix) line += isLast ? "└── " : "├── ";
+    line += node.name + "\n";
+    const kids = childIdx[id] || [];
+    kids.forEach((kid,idx)=>{
+      const last = idx===kids.length-1;
+      const newPrefix = prefix + (isLast ? "    " : "│   ");
+      line += recurse(kid,newPrefix,last);
+    });
+    return line;
+  }
+  asciiTreeEl.textContent = recurse("root","","true");
+}
+
+const versionSelect = document.getElementById("versionSelect");
+const treeContainer = document.getElementById("treeContainer");
+
+function renderTree(){
+  const childIdx = buildTreeIndex();
+  function renderNode(id, container){
+    const li=document.createElement("li");
+    const btn=document.createElement("button");
+    btn.className="btn";
+    btn.textContent=state.versions[id].name;
+    btn.onclick=()=>{ state.current=id; hydrateUIFromState(); };
+    li.appendChild(btn);
+    const kids = childIdx[id];
+    if(kids && kids.length){
+      const div=document.createElement("div");
+      div.className="indent";
+      const ul=document.createElement("ul"); ul.className="tree";
+      kids.forEach(cid=>renderNode(cid,ul));
+      div.appendChild(ul); li.appendChild(div);
+    }
+    container.appendChild(li);
+  }
+  const ul=document.createElement("ul"); ul.className="tree";
+  renderNode("root",ul);
+  treeContainer.innerHTML=""; treeContainer.appendChild(ul);
+}
+
+const dynamicContainer=document.getElementById("dynamicSections");
+function renderDynamicSections(){
+  dynamicContainer.innerHTML="";
+  const node=getCurrentNode();
+  node.dynamicSections.forEach((sec,idx)=>{ dynamicContainer.appendChild(sectionCard(sec,idx)); });
+}
+
+function sectionCard(sec,index){
+  const wrap=document.createElement("div"); wrap.className="section-card";
+  const head=document.createElement("div"); head.className="section-head";
+  const titleInput=document.createElement("input"); titleInput.type="text";
+  titleInput.value=sec.title||""; titleInput.placeholder="Section title";
+  titleInput.oninput=()=>{ sec.title=titleInput.value; renderMarkdown(); };
+  const delBtn=document.createElement("button"); delBtn.className="btn danger"; delBtn.textContent="Delete";
+  delBtn.onclick=()=>{ getCurrentNode().dynamicSections.splice(index,1); renderDynamicSections(); renderMarkdown(); };
+  head.appendChild(titleInput); head.appendChild(delBtn);
+  const ta=document.createElement("textarea"); ta.placeholder="- Item 1\n- Item 2"; ta.value=sec.content||"";
+  ta.oninput=()=>{ sec.content=ta.value; renderMarkdown(); };
+  wrap.appendChild(head); wrap.appendChild(ta);
+  return wrap;
+}
+
+const pi_name=document.getElementById("pi_name");
+const pi_email=document.getElementById("pi_email");
+const pi_phone=document.getElementById("pi_phone");
+const pi_location=document.getElementById("pi_location");
+const pi_web=document.getElementById("pi_web");
+const fx_exp=document.getElementById("fixed_experience");
+const fx_edu=document.getElementById("fixed_education");
+
+[pi_name,pi_email,pi_phone,pi_location,pi_web].forEach(el=>{
+  el.addEventListener("input",()=>{
+    state.fixed.personal={name:pi_name.value,email:pi_email.value,phone:pi_phone.value,location:pi_location.value,web:pi_web.value};
+    renderMarkdown();
+  });
+});
+[fx_exp,fx_edu].forEach(el=>el.addEventListener("input",()=>{ state.fixed.experience=fx_exp.value; state.fixed.education=fx_edu.value; renderMarkdown(); 
+}));
+
+const previewEl=document.getElementById("preview");
+function renderMarkdown(){
+  const p=state.fixed.personal; const lines=[];
+  if(p.name) lines.push(`# ${p.name}`);
+  const contacts=[];
+  if(p.email) contacts.push(`**Email:** ${p.email}`);
+  if(p.phone) contacts.push(`**Phone:** ${p.phone}`);
+  if(p.location) contacts.push(`**Location:** ${p.location}`);
+  if(p.web) contacts.push(`**Web:** ${p.web}`);
+  if(contacts.length) lines.push(contacts.join(" \n"));
+  if(state.fixed.experience?.trim()){ lines.push(`\n## Experience`); lines.push(state.fixed.experience.trim()); }
+  if(state.fixed.education?.trim()){ lines.push(`\n## Education`); lines.push(state.fixed.education.trim()); }
+  const node=getCurrentNode();
+  node.dynamicSections.forEach(sec=>{ const title=(sec.title||"").trim(); const body=(sec.content||"").trim(); if(title) lines.push(`\n## ${title}`); 
+if(body) lines.push(body); });
+  previewEl.textContent=lines.join("\n");
+}
+
+const addChildBtn=document.getElementById("addChildBtn");
+const deleteVersionBtn=document.getElementById("deleteVersionBtn");
+const newVersionName=document.getElementById("newVersionName");
+
+addChildBtn.onclick=()=>{
+  const name=(newVersionName.value||"").trim();
+  if(!name){ alert("Please enter a version name."); return; }
+  const id=uid(); const parent=state.current;
+  state.versions[id]={id,name,parent,dynamicSections:cloneDynamic(getCurrentNode().dynamicSections)};
+  state.current=id; newVersionName.value=""; hydrateUIFromState();
+};
+
+deleteVersionBtn.onclick=()=>{
+  const id=state.current; if(id==="root"){ alert("Root cannot be deleted."); return; }
+  if(!confirm("Delete this version and its subtree?")) return;
+  const childIdx=buildTreeIndex();
+  function delRec(x){ (childIdx[x]||[]).forEach(delRec); delete state.versions[x]; }
+  delRec(id);
+  let ancestor=state.versions[id]?.parent||"root";
+  while(ancestor && !state.versions[ancestor]) ancestor=state.versions[ancestor]?.parent||"root";
+  state.current=ancestor||"root"; hydrateUIFromState();
+};
+
+versionSelect.onchange=()=>{ state.current=versionSelect.value; hydrateUIFromState(); };
+
+const addSectionBtn=document.getElementById("addSectionBtn");
+addSectionBtn.onclick=()=>{
+  getCurrentNode().dynamicSections.push({title:"",content:""});
+  renderDynamicSections(); renderMarkdown();
+};
+
+const downloadMdBtn=document.getElementById("downloadMdBtn");
+const downloadJsonBtn=document.getElementById("downloadJsonBtn");
+const importJsonInput=document.getElementById("importJsonInput");
+
+function download(filename,text,type="text/plain"){ const blob=new Blob([text],{type}); const a=document.createElement("a"); 
+a.href=URL.createObjectURL(blob); 
+a.download=filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
+
+downloadMdBtn.onclick=()=>{
+  const versionName=buildPathName(state.current).replace(/\s+/g,"_"); const date=new Date().toISOString().slice(0,10);
+  const md=previewEl.textContent||""; download(`CV_${versionName}_${date}.md`,md,"text/markdown");
+};
+
+downloadJsonBtn.onclick=()=>{
+  const date=new Date().toISOString().slice(0,10); download(`CV_${date}.json`,JSON.stringify(state,null,2),"application/json");
+};
+
+importJsonInput.onchange=(e)=>{
+  const file=e.target.files?.[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const obj=JSON.parse(String(reader.result));
+      if(!obj || !obj.versions || !obj.fixed) throw new Error("Invalid file");
+      Object.assign(state.fixed,obj.fixed); state.versions=obj.versions; state.current=obj.current||"root";
+      hydrateUIFromState(); alert("Tree imported.");
+    } catch(err){ alert("Import failed: "+err.message); } finally{ importJsonInput.value=""; }
+  };
+  reader.readAsText(file);
+};
+
+function hydrateUIFromState(){
+  pi_name.value=state.fixed.personal.name||"";
+  pi_email.value=state.fixed.personal.email||"";
+  pi_phone.value=state.fixed.personal.phone||"";
+  pi_location.value=state.fixed.personal.location||"";
+  pi_web.value=state.fixed.personal.web||"";
+  fx_exp.value=state.fixed.experience||"";
+  fx_edu.value=state.fixed.education||"";
+  renderVersionSelect(); renderTree(); renderDynamicSections(); renderMarkdown(); renderAsciiTree();
+}
+
+function renderVersionSelect(){
+  const entries=Object.values(state.versions).map(v=>({id:v.id,label:buildPathName(v.id)})).sort((a,b)=>a.label.localeCompare(b.label));
+  versionSelect.innerHTML="";
+  entries.forEach(e=>{ const opt=document.createElement("option"); opt.value=e.id; opt.textContent=e.label; versionSelect.appendChild(opt); });
+  versionSelect.value=state.current;
+}
+
+hydrateUIFromState();
+</script>
+</body>
+</html>
+
