@@ -1,4 +1,4 @@
-[![Open in browser](https://img.shields.io/badge/Open_in_Browser-blue?logo=google-chrome)](index.html)
+[![Open in browser](https://img.shields.io/badge/Open_in_Browser-blue?logo=google-chrome)](cvBox.html)
 
 # cvBox
 
